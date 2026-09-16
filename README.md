@@ -28,7 +28,7 @@ npm install
 npm run dev
 ```
 
-Open [http://127.0.0.1:4317](http://127.0.0.1:4317).
+Open [http://127.0.0.1:4317](http://127.0.0.1:4317) or [http://localhost:4317](http://localhost:4317).
 
 Production:
 
