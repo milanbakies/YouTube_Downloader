@@ -1,36 +1,78 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# YouTube Downloader (MP3)
 
-## Getting Started
+Local web app to convert YouTube **videos** and **playlists** to MP3. Built for long sessions (multi-hour videos) and full playlists. Uses **Next.js**, **yt-dlp**, and **ffmpeg**.
 
-First, run the development server:
+## Requirements
+
+- Node.js 20+ (npm)
+- [ffmpeg](https://ffmpeg.org/)
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
+
+On macOS with Homebrew:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+brew install ffmpeg yt-dlp
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Or run the helper script:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+./scripts/setup.sh
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Run locally
 
-## Learn More
+```bash
+cd YouTube_Downloader
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://127.0.0.1:4317](http://127.0.0.1:4317).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Production:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run build
+npm run start -- -p 4317
+```
 
-## Deploy on Vercel
+## Usage
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Paste a YouTube video or playlist URL.
+2. Choose MP3 bitrate: 128, 192, 256, or 320 kbps.
+3. Click **Start conversion**. Progress updates while yt-dlp runs in the background.
+4. When finished, download a single **MP3** or a **ZIP** (playlists with multiple tracks).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Downloads are stored under `.data/jobs/` until you remove them.
+
+## YouTube sign-in / bot checks
+
+If YouTube blocks the download, export cookies via your browser:
+
+```bash
+export YT_DLP_COOKIES_FROM_BROWSER=chrome
+# or: firefox, safari, brave, edge, chromium, …
+npm run dev
+```
+
+Optional `.env.local`:
+
+```env
+YT_DLP_COOKIES_FROM_BROWSER=chrome
+# YT_DLP_PATH=/custom/path/yt-dlp
+# FFMPEG_PATH=/custom/path/ffmpeg
+```
+
+## API (for scripts)
+
+- `GET /api/health` — tool versions
+- `POST /api/jobs` — body `{ "url": "…", "quality": 192 }`
+- `GET /api/jobs/:id` — job status and progress
+- `GET /api/jobs/:id/download` — stream MP3/ZIP (supports `Range` for large files)
+
+## Notes
+
+- No artificial duration limit; limits are disk space and YouTube itself.
+- Keep the dev server running while long jobs complete.
+- 
