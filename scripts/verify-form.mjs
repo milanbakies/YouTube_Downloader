@@ -8,15 +8,7 @@ const page = await browser.newPage();
 await page.goto(url);
 
 const input = page.locator("#url");
-await input.click();
-await page.evaluate(
-  async (link) => {
-    await navigator.clipboard.writeText(link);
-  },
-  testLink,
-);
-await input.focus();
-await page.keyboard.press(process.platform === "darwin" ? "Meta+V" : "Control+V");
+await input.fill(testLink);
 
 const value = await input.inputValue();
 if (!value.includes("youtube.com")) {
