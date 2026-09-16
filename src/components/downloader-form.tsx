@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { isValidYouTubeUrl, normalizeYouTubeUrl } from "@/lib/youtube-url";
 import { AUDIO_QUALITIES, type AudioQuality, type Job } from "@/lib/types";
 import { Download, Loader2, Music2 } from "lucide-react";
 
@@ -78,13 +79,22 @@ export function DownloaderForm() {
     e.preventDefault();
     setError(null);
     setJob(null);
+
+    const normalized = normalizeYouTubeUrl(url);
+    if (!isValidYouTubeUrl(normalized)) {
+      setError(
+        "Enter a valid YouTube video or playlist link (youtube.com or youtu.be).",
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, quality }),
+        body: JSON.stringify({ url: normalized, quality }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -143,11 +153,19 @@ export function DownloaderForm() {
               <Label htmlFor="url">YouTube URL</Label>
               <Input
                 id="url"
-                type="url"
+                type="text"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
                 placeholder="https://www.youtube.com/watch?v=… or playlist URL"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                required
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text");
+                  if (!pasted) return;
+                  e.preventDefault();
+                  setUrl(pasted.trim());
+                }}
                 disabled={Boolean(busy)}
               />
             </div>
@@ -170,7 +188,10 @@ export function DownloaderForm() {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit" disabled={submitting || Boolean(busy)}>
+            <Button
+              type="submit"
+              disabled={submitting || Boolean(busy) || !url.trim()}
+            >
               {submitting || busy ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />

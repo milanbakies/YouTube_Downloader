@@ -3,10 +3,16 @@ import { z } from "zod";
 import { enqueueJob } from "@/lib/download-runner";
 import { saveJob } from "@/lib/job-store";
 import { isPlaylistUrl, jobDir } from "@/lib/paths";
+import { isValidYouTubeUrl, normalizeYouTubeUrl } from "@/lib/youtube-url";
 import { AUDIO_QUALITIES, type Job } from "@/lib/types";
 
 const schema = z.object({
-  url: z.string().url(),
+  url: z
+    .string()
+    .transform((s) => normalizeYouTubeUrl(s))
+    .refine((s) => isValidYouTubeUrl(s), {
+      message: "Must be a valid YouTube video or playlist URL",
+    }),
   quality: z.coerce
     .number()
     .refine((n) => (AUDIO_QUALITIES as readonly number[]).includes(n)),
