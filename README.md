@@ -23,6 +23,7 @@ Or run the helper script:
 ## Run locally
 
 ```bash
+git clone https://github.com/milanbakies/YouTube_Downloader.git
 cd YouTube_Downloader
 npm install
 npm run dev
@@ -75,4 +76,3 @@ YT_DLP_COOKIES_FROM_BROWSER=chrome
 
 - No artificial duration limit; limits are disk space and YouTube itself.
 - Keep the dev server running while long jobs complete.
-- 
