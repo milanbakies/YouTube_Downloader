@@ -26,7 +26,8 @@ if (await button.isDisabled()) {
 }
 
 await button.click();
-await page.waitForSelector("text=Status:", { timeout: 10000 });
+await page.waitForURL(/\/jobs\/[0-9a-f-]+$/, { timeout: 15000 });
+await page.getByRole("link", { name: /Download MP3/i }).waitFor({ timeout: 120000 });
 
-console.log("OK: paste kept URL and conversion started");
+console.log("OK: conversion finished with download link");
 await browser.close();

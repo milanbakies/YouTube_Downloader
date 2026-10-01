@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { ffmpegPath, ytdlpPath } from "@/lib/paths";
+import { cookiesFromBrowser, ffmpegPath, ytdlpPath } from "@/lib/paths";
 
 function version(cmd: string, args: string[]): string | null {
   try {
@@ -27,6 +27,6 @@ export async function GET() {
     ok,
     ytdlp: { path: ytdlp, version: ytdlpVersion },
     ffmpeg: { path: ffmpeg, version: ffmpegVersion },
-    cookiesFromBrowser: process.env.YT_DLP_COOKIES_FROM_BROWSER ?? null,
+    cookiesFromBrowser: cookiesFromBrowser() ?? null,
   });
 }

@@ -49,13 +49,15 @@ Downloads are stored under `.data/jobs/` until you remove them.
 
 ## YouTube sign-in / bot checks
 
-If YouTube blocks the download, export cookies via your browser:
+If YouTube blocks the download, export cookies via your browser (**only when needed** — do not set this by default or yt-dlp can hang waiting for the macOS keychain):
 
 ```bash
+cd YouTube_Downloader
 export YT_DLP_COOKIES_FROM_BROWSER=chrome
-# or: firefox, safari, brave, edge, chromium, …
 npm run dev
 ```
+
+Start the dev server from **Terminal** (not a headless background job) the first time you use cookies, so macOS can allow keychain access.
 
 Optional `.env.local`:
 

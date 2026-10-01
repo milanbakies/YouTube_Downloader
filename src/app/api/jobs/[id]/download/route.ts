@@ -20,15 +20,16 @@ export async function GET(request: Request, { params }: Params) {
 
   try {
     const filePath = resolveJobOutput(id, job.outputFile);
-    const isZip = job.outputFile.toLowerCase().endsWith(".zip");
+    const isZip = filePath.toLowerCase().endsWith(".zip");
     const contentType = isZip ? "application/zip" : "audio/mpeg";
     const range = request.headers.get("range");
+    const downloadName = isZip ? "download.zip" : "download.mp3";
 
     return createRangeResponse(
       filePath,
       range,
       contentType,
-      job.outputFile,
+      downloadName,
     );
   } catch {
     return Response.json({ error: "File missing on server" }, { status: 410 });

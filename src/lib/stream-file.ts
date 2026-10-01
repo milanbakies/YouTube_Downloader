@@ -3,19 +3,24 @@ import path from "path";
 import { Readable } from "stream";
 
 export function resolveJobOutput(jobId: string, outputFile: string): string {
+  const jobRoot = path.join(process.cwd(), ".data", "jobs", jobId);
+  const stableMp3 = path.join(jobRoot, "download.mp3");
+  const stableZip = path.join(jobRoot, "download.zip");
+  if (fs.existsSync(stableMp3)) return stableMp3;
+  if (fs.existsSync(stableZip)) return stableZip;
+
   const base = path.basename(outputFile);
-  const resolved = path.join(process.cwd(), ".data", "jobs", jobId, base);
-  const filesAlt = path.join(
-    process.cwd(),
-    ".data",
-    "jobs",
-    jobId,
-    "files",
-    base,
-  );
+  const resolved = path.join(jobRoot, base);
+  const filesAlt = path.join(jobRoot, "files", base);
   if (fs.existsSync(resolved)) return resolved;
   if (fs.existsSync(filesAlt)) return filesAlt;
   throw new Error("Output file not found");
+}
+
+function contentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+  const utf8 = encodeURIComponent(filename);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
 }
 
 export function createRangeResponse(
@@ -26,6 +31,7 @@ export function createRangeResponse(
 ): Response {
   const stat = fs.statSync(filePath);
   const size = stat.size;
+  const disposition = contentDisposition(downloadName);
 
   if (!rangeHeader) {
     const stream = fs.createReadStream(filePath);
@@ -34,7 +40,7 @@ export function createRangeResponse(
       headers: {
         "Content-Type": contentType,
         "Content-Length": String(size),
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(downloadName)}"`,
+        "Content-Disposition": disposition,
         "Accept-Ranges": "bytes",
       },
     });
@@ -62,7 +68,7 @@ export function createRangeResponse(
       "Content-Type": contentType,
       "Content-Length": String(chunkSize),
       "Content-Range": `bytes ${start}-${end}/${size}`,
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(downloadName)}"`,
+      "Content-Disposition": disposition,
       "Accept-Ranges": "bytes",
     },
   });

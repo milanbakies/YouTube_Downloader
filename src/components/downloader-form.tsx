@@ -99,7 +99,9 @@ export function DownloaderForm() {
         setError(data.error ?? "Could not start download");
         return;
       }
-      setJob(data.job as Job);
+      const created = data.job as Job;
+      window.location.assign(`/jobs/${created.id}`);
+      return;
     } catch {
       setError("Network error — is the dev server running?");
     } finally {

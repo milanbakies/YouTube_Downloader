@@ -26,39 +26,108 @@ function parseProgressLine(line: string): number | null {
   return Math.min(100, Math.max(0, n));
 }
 
-async function probePlaylist(url: string): Promise<{ title?: string; count?: number }> {
-  return new Promise((resolve) => {
-    const args = [
-      "--flat-playlist",
-      "--dump-single-json",
-      "--no-warnings",
-      url,
-    ];
-    if (cookiesFromBrowser()) {
-      args.unshift("--cookies-from-browser", cookiesFromBrowser()!);
-    }
-    const proc = spawn(ytdlpPath(), args, { env: process.env });
-    let out = "";
-    proc.stdout.on("data", (c) => {
-      out += c.toString();
+const YTDLP_NO_OUTPUT_MS = 3 * 60 * 1000;
+const PROBE_TIMEOUT_MS = 45 * 1000;
+
+function spawnYtdlp(
+  args: string[],
+  onStdoutLine?: (line: string) => void,
+): Promise<{ code: number | null; stderrTail: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ytdlpPath(), args, {
+      env: {
+        ...process.env,
+        PATH: `${path.dirname(ffmpegPath())}:${process.env.PATH ?? ""}`,
+      },
     });
-    proc.on("close", () => {
-      try {
-        const data = JSON.parse(out);
-        const title = data.title as string | undefined;
-        const count =
-          typeof data.playlist_count === "number"
-            ? data.playlist_count
-            : Array.isArray(data.entries)
-              ? data.entries.length
-              : undefined;
-        resolve({ title, count });
-      } catch {
-        resolve({});
+
+    let stderrTail = "";
+    let lastOutputAt = Date.now();
+
+    const touch = () => {
+      lastOutputAt = Date.now();
+    };
+
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastOutputAt > YTDLP_NO_OUTPUT_MS) {
+        proc.kill("SIGKILL");
+        clearInterval(watchdog);
+        reject(
+          new Error(
+            "yt-dlp stalled (no output for 3 minutes). If YT_DLP_COOKIES_FROM_BROWSER is set, launch the dev server from Terminal so macOS can access the browser keychain, or remove that variable and retry.",
+          ),
+        );
       }
+    }, 5000);
+
+    const onLine = (line: string) => {
+      touch();
+      onStdoutLine?.(line);
+    };
+
+    proc.stdout.on("data", (chunk) => {
+      chunk.toString().split("\n").forEach(onLine);
     });
-    proc.on("error", () => resolve({}));
+    proc.stderr.on("data", (chunk) => {
+      const text = chunk.toString();
+      stderrTail = (stderrTail + text).slice(-2000);
+      touch();
+      text.split("\n").forEach(onLine);
+    });
+
+    proc.on("error", (err) => {
+      clearInterval(watchdog);
+      reject(err);
+    });
+    proc.on("close", (code) => {
+      clearInterval(watchdog);
+      resolve({ code, stderrTail });
+    });
   });
+}
+
+async function probePlaylist(url: string): Promise<{ title?: string; count?: number }> {
+  const args = [
+    "--flat-playlist",
+    "--dump-single-json",
+    "--no-warnings",
+    url,
+  ];
+  const cookies = cookiesFromBrowser();
+  if (cookies) {
+    args.unshift("--cookies-from-browser", cookies);
+  }
+
+  let out = "";
+  try {
+    const result = await Promise.race([
+      (async () => {
+        const proc = spawn(ytdlpPath(), args, { env: process.env });
+        return new Promise<{ code: number | null }>((resolve, reject) => {
+          proc.stdout.on("data", (c) => {
+            out += c.toString();
+          });
+          proc.on("error", reject);
+          proc.on("close", (code) => resolve({ code }));
+        });
+      })(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("probe timeout")), PROBE_TIMEOUT_MS),
+      ),
+    ]);
+    if (result.code !== 0) return {};
+    const data = JSON.parse(out);
+    const title = data.title as string | undefined;
+    const count =
+      typeof data.playlist_count === "number"
+        ? data.playlist_count
+        : Array.isArray(data.entries)
+          ? data.entries.length
+          : undefined;
+    return { title, count };
+  } catch {
+    return {};
+  }
 }
 
 function listMp3Files(dir: string): string[] {
@@ -110,61 +179,52 @@ async function runYtdlp(job: Job): Promise<void> {
 
   args.push(job.url);
 
-  return new Promise((resolve, reject) => {
-    const proc = spawn(ytdlpPath(), args, {
-      env: {
-        ...process.env,
-        PATH: `${path.dirname(ffmpegPath())}:${process.env.PATH ?? ""}`,
-      },
-    });
+  let lastPct = 0;
 
-    let lastPct = 0;
+  const { code, stderrTail } = await spawnYtdlp(args, (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
 
-    const onLine = (line: string) => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
+    if (trimmed.includes("[Merger]") || trimmed.includes("[ExtractAudio]")) {
+      patchJob(job.id, { message: trimmed.slice(0, 200) });
+    }
 
-      if (trimmed.includes("[Merger]") || trimmed.includes("[ExtractAudio]")) {
-        patchJob(job.id, { message: trimmed.slice(0, 200) });
-      }
-
-      const pct = parseProgressLine(trimmed);
-      if (pct !== null) {
-        lastPct = pct;
-        const entriesDone = listMp3Files(outDir).length;
-        patchJob(job.id, {
-          progress: pct,
-          message: trimmed.slice(0, 200),
-          entriesDone,
-        });
-      } else if (trimmed.startsWith("[download]")) {
-        patchJob(job.id, {
-          progress: lastPct,
-          message: trimmed.slice(0, 200),
-          entriesDone: listMp3Files(outDir).length,
-        });
-      }
-    };
-
-    proc.stdout.on("data", (chunk) => {
-      chunk
-        .toString()
-        .split("\n")
-        .forEach(onLine);
-    });
-    proc.stderr.on("data", (chunk) => {
-      chunk
-        .toString()
-        .split("\n")
-        .forEach(onLine);
-    });
-
-    proc.on("error", (err) => reject(err));
-    proc.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`yt-dlp exited with code ${code ?? "unknown"}`));
-    });
+    const pct = parseProgressLine(trimmed);
+    if (pct !== null) {
+      lastPct = pct;
+      const entriesDone = listMp3Files(outDir).length;
+      patchJob(job.id, {
+        progress: pct,
+        message: trimmed.slice(0, 200),
+        entriesDone,
+      });
+    } else if (trimmed.startsWith("[download]")) {
+      patchJob(job.id, {
+        progress: lastPct,
+        message: trimmed.slice(0, 200),
+        entriesDone: listMp3Files(outDir).length,
+      });
+    }
   });
+
+  if (code === 0) return;
+
+  const hint = stderrTail.includes("Sign in to confirm")
+    ? " YouTube wants browser cookies — run from Terminal with export YT_DLP_COOKIES_FROM_BROWSER=chrome (allow keychain access), then retry."
+    : "";
+  throw new Error(
+    `yt-dlp exited with code ${code ?? "unknown"}.${hint} ${stderrTail.slice(-400)}`.trim(),
+  );
+}
+
+async function publishStableDownload(
+  jobId: string,
+  sourcePath: string,
+  destName: "download.mp3" | "download.zip",
+): Promise<string> {
+  const destPath = path.join(jobDir(jobId), destName);
+  await fs.promises.copyFile(sourcePath, destPath);
+  return destPath;
 }
 
 async function finalizeOutput(job: Job): Promise<string> {
@@ -172,24 +232,26 @@ async function finalizeOutput(job: Job): Promise<string> {
   const mp3s = listMp3Files(filesDir);
 
   if (mp3s.length === 0) {
-    throw new Error("No MP3 files were produced. Check the URL and cookies.");
+    throw new Error(
+      "No MP3 files were produced. If YouTube blocked the download, quit Chrome and set YT_DLP_COOKIES_FROM_BROWSER=chrome, then retry.",
+    );
   }
 
   if (job.isPlaylist && mp3s.length > 1) {
     patchJob(job.id, { status: "zipping", progress: 99, message: "Creating ZIP…" });
-    const zipPath = path.join(jobDir(job.id), "playlist.zip");
+    const zipPath = path.join(jobDir(job.id), "playlist-temp.zip");
     await zipDirectory(filesDir, zipPath);
-    return zipPath;
+    return publishStableDownload(job.id, zipPath, "download.zip");
   }
 
   if (mp3s.length === 1) {
-    return mp3s[0]!;
+    return publishStableDownload(job.id, mp3s[0]!, "download.mp3");
   }
 
   patchJob(job.id, { status: "zipping", progress: 99, message: "Creating ZIP…" });
-  const zipPath = path.join(jobDir(job.id), "download.zip");
+  const zipPath = path.join(jobDir(job.id), "playlist-temp.zip");
   await zipDirectory(filesDir, zipPath);
-  return zipPath;
+  return publishStableDownload(job.id, zipPath, "download.zip");
 }
 
 export async function runJob(jobId: string): Promise<void> {
