@@ -29,6 +29,8 @@ npm install
 npm run dev
 ```
 
+If you see **`EADDRINUSE` on port 4317**, the app is usually already running — open [http://127.0.0.1:4317](http://127.0.0.1:4317). `npm run dev` now detects that and opens the browser instead of failing. To force a new server: stop the old terminal process, or run `npm run dev:force` after freeing the port (`lsof -nP -iTCP:4317 -sTCP:LISTEN`).
+
 Open [http://127.0.0.1:4317](http://127.0.0.1:4317) or [http://localhost:4317](http://localhost:4317).
 
 Production:

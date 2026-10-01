@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 4317",
-    "dev:open": "next dev -p 4317",
+    "dev": "node scripts/dev.mjs",
+    "dev:force": "next dev -p 4317",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
