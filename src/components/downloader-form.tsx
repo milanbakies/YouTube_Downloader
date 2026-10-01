@@ -14,13 +14,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { isValidYouTubeUrl, normalizeYouTubeUrl } from "@/lib/youtube-url";
 import { AUDIO_QUALITIES, type AudioQuality, type Job } from "@/lib/types";
 import { Download, Loader2, Music2 } from "lucide-react";
@@ -31,9 +24,10 @@ type Health = {
   ffmpeg: { path: string; version: string | null };
 };
 
+const fieldClassName =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 md:text-sm dark:bg-input/30";
+
 export function DownloaderForm() {
-  const [url, setUrl] = useState("");
-  const [quality, setQuality] = useState<AudioQuality>(192);
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -75,10 +69,14 @@ export function DownloaderForm() {
     return () => clearInterval(timer);
   }, [job?.id, job?.status, poll]);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setJob(null);
+
+    const form = new FormData(e.currentTarget);
+    const url = String(form.get("url") ?? "").trim();
+    const quality = Number(form.get("quality")) as AudioQuality;
 
     const normalized = normalizeYouTubeUrl(url);
     if (!isValidYouTubeUrl(normalized)) {
@@ -153,45 +151,33 @@ export function DownloaderForm() {
               <Label htmlFor="url">YouTube URL</Label>
               <Input
                 id="url"
+                name="url"
                 type="text"
                 inputMode="url"
                 autoComplete="off"
                 spellCheck={false}
                 placeholder="https://www.youtube.com/watch?v=… or playlist URL"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onPaste={(e) => {
-                  const pasted = e.clipboardData.getData("text");
-                  if (!pasted) return;
-                  e.preventDefault();
-                  setUrl(pasted.trim());
-                }}
+                defaultValue=""
                 disabled={Boolean(busy)}
               />
             </div>
             <div className="grid gap-2">
-              <Label>Audio quality (kbps)</Label>
-              <Select
-                value={String(quality)}
-                onValueChange={(v) => setQuality(Number(v) as AudioQuality)}
+              <Label htmlFor="quality">Audio quality (kbps)</Label>
+              <select
+                id="quality"
+                name="quality"
+                defaultValue="192"
                 disabled={Boolean(busy)}
+                className={fieldClassName}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {AUDIO_QUALITIES.map((q) => (
-                    <SelectItem key={q} value={String(q)}>
-                      {q} kbps
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {AUDIO_QUALITIES.map((q) => (
+                  <option key={q} value={q}>
+                    {q} kbps
+                  </option>
+                ))}
+              </select>
             </div>
-            <Button
-              type="submit"
-              disabled={submitting || Boolean(busy) || !url.trim()}
-            >
+            <Button type="submit" disabled={submitting || Boolean(busy)}>
               {submitting || busy ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />

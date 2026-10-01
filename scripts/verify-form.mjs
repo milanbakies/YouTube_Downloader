@@ -9,8 +9,13 @@ await page.goto(url);
 
 const input = page.locator("#url");
 await input.fill(testLink);
+await page.selectOption("#quality", "256");
 
 const value = await input.inputValue();
+const quality = await page.locator("#quality").inputValue();
+if (quality !== "256") {
+  throw new Error(`Quality select failed, value was: ${quality}`);
+}
 if (!value.includes("youtube.com")) {
   throw new Error(`Paste failed, value was: ${value}`);
 }
