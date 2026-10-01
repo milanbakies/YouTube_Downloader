@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { JobProgressBar } from "@/components/job-progress-bar";
 import { getJob } from "@/lib/job-store";
 import { cn } from "@/lib/utils";
 import { Download } from "lucide-react";
@@ -61,7 +61,7 @@ export default async function JobPage({ params }: PageProps) {
           <CardContent className="flex flex-col gap-4">
             {inProgress && (
               <>
-                <Progress value={job.progress} className="h-2" />
+                <JobProgressBar value={job.progress} />
                 <p className="text-sm text-muted-foreground">{job.message}</p>
                 {job.entryCount != null && job.entryCount > 0 && (
                   <p className="text-xs text-muted-foreground">

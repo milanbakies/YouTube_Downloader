@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
+import { JobProgressBar } from "@/components/job-progress-bar";
 import { isValidYouTubeUrl, normalizeYouTubeUrl } from "@/lib/youtube-url";
 import { AUDIO_QUALITIES, type AudioQuality, type Job } from "@/lib/types";
 import { Download, Loader2, Music2 } from "lucide-react";
@@ -216,7 +216,7 @@ export function DownloaderForm() {
               job.status === "zipping" ||
               job.status === "queued") && (
               <>
-                <Progress value={job.progress} className="h-2" />
+                <JobProgressBar value={job.progress} />
                 <p className="text-xs text-muted-foreground line-clamp-2">
                   {job.message}
                 </p>
