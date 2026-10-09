@@ -57,13 +57,17 @@ export function cookiesFromBrowser(): string | undefined {
   return v || undefined;
 }
 
+/** True only for real playlists — not YouTube Mix/Radio (`list=RD…`). */
 export function isPlaylistUrl(url: string): boolean {
   try {
     const u = new URL(url);
     if (u.pathname.includes("/playlist")) return true;
-    if (u.searchParams.has("list")) return true;
+    const list = u.searchParams.get("list");
+    if (!list) return false;
+    // User playlists: PL… ; channel uploads: UU… / OLAK5uy_… etc.
+    if (list.startsWith("RD")) return false;
+    return list.startsWith("PL") || list.startsWith("UU") || list.startsWith("OL");
   } catch {
     return false;
   }
-  return false;
 }

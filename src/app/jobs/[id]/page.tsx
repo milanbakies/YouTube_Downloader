@@ -75,9 +75,17 @@ export default async function JobPage({ params }: PageProps) {
             )}
 
             {job.status === "failed" && (
-              <p className="text-sm text-destructive">
-                {job.error ?? job.message}
-              </p>
+              <div className="flex flex-col gap-2">
+                <p className="text-sm text-destructive whitespace-pre-wrap break-words">
+                  {(job.error ?? job.message).slice(0, 800)}
+                </p>
+                <Link
+                  href="/"
+                  className={cn(buttonVariants({ variant: "outline" }), "w-full")}
+                >
+                  Try again
+                </Link>
+              </div>
             )}
 
             {job.status === "completed" && (
