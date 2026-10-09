@@ -22,7 +22,7 @@ Or run the helper script:
 
 ## Run locally
 
-**Easiest on macOS:** double-click `YouTube Downloader starten.command` in Finder. It stops any old server on port 4317, starts the app, and opens your browser.
+**Easiest on macOS:** double-click `YouTube Downloader starten.command` in Finder. It stops any old server on port 4317, enables **Chrome YouTube cookies** (for bot checks), starts the app, and opens your browser. Stay signed in to [youtube.com](https://www.youtube.com) in Chrome; allow **Keychain** access the first time if macOS asks.
 
 ```bash
 git clone https://github.com/milanbakies/YouTube_Downloader.git
@@ -53,22 +53,25 @@ Downloads are stored under `.data/jobs/` until you remove them.
 
 ## YouTube sign-in / bot checks
 
-If YouTube blocks the download, export cookies via your browser (**only when needed** — do not set this by default or yt-dlp can hang waiting for the macOS keychain):
+After several downloads YouTube often returns *Sign in to confirm you’re not a bot*. The app must pass **logged-in** cookies to yt-dlp.
+
+**Recommended:** use `YouTube Downloader starten.command` — it sets `YT_DLP_COOKIES_FROM_BROWSER=chrome` and creates `.env.local` from `.env.example` if needed. Stay signed in to YouTube in Chrome; allow Keychain access when macOS asks.
+
+**Alternative:** place a Netscape `cookies.txt` in the project folder (see [yt-dlp cookie export](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies)). That avoids Keychain prompts.
+
+Manual start:
 
 ```bash
 cd YouTube_Downloader
 export YT_DLP_COOKIES_FROM_BROWSER=chrome
-npm run dev
+npm run dev:force
 ```
 
-Start the dev server from **Terminal** (not a headless background job) the first time you use cookies, so macOS can allow keychain access.
-
-Optional `.env.local`:
+Optional `.env.local` (copy from `.env.example`):
 
 ```env
 YT_DLP_COOKIES_FROM_BROWSER=chrome
-# YT_DLP_PATH=/custom/path/yt-dlp
-# FFMPEG_PATH=/custom/path/ffmpeg
+# YT_DLP_COOKIES_FILE=cookies.txt
 ```
 
 ## API (for scripts)

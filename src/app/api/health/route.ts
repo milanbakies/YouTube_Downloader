@@ -1,5 +1,11 @@
 import { execSync } from "child_process";
-import { cookiesFromBrowser, ffmpegPath, ytdlpPath } from "@/lib/paths";
+import {
+  cookiesFromBrowser,
+  cookiesFilePath,
+  ffmpegPath,
+  resolveYtdlpCookies,
+  ytdlpPath,
+} from "@/lib/paths";
 
 function version(cmd: string, args: string[]): string | null {
   try {
@@ -23,10 +29,18 @@ export async function GET() {
 
   const ok = Boolean(ytdlpVersion && ffmpegVersion);
 
+  const cookies = resolveYtdlpCookies();
+
   return Response.json({
     ok,
     ytdlp: { path: ytdlp, version: ytdlpVersion },
     ffmpeg: { path: ffmpeg, version: ffmpegVersion },
     cookiesFromBrowser: cookiesFromBrowser() ?? null,
+    cookiesFile: cookiesFilePath() ?? null,
+    youtubeAuth: cookies
+      ? cookies.mode === "file"
+        ? { mode: "file" as const, path: cookies.path }
+        : { mode: "browser" as const, browser: cookies.browser }
+      : null,
   });
 }

@@ -22,6 +22,10 @@ type Health = {
   ok: boolean;
   ytdlp: { path: string; version: string | null };
   ffmpeg: { path: string; version: string | null };
+  youtubeAuth:
+    | { mode: "file"; path: string }
+    | { mode: "browser"; browser: string }
+    | null;
 };
 
 const fieldClassName =
@@ -136,6 +140,19 @@ export function DownloaderForm() {
           <AlertDescription>
             Install ffmpeg and yt-dlp on this machine (see README), then restart
             the dev server.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {health?.ok && !health.youtubeAuth && (
+        <Alert>
+          <AlertTitle>YouTube sign-in not configured</AlertTitle>
+          <AlertDescription>
+            After a few downloads YouTube may block anonymous requests. Quit
+            other dev servers, then double-click{" "}
+            <strong>YouTube Downloader starten.command</strong> (uses Chrome
+            cookies), or add <code className="text-xs">cookies.txt</code> to the
+            project folder.
           </AlertDescription>
         </Alert>
       )}

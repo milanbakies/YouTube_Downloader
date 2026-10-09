@@ -23,6 +23,9 @@
 # job data
 .data/
 
+# exported YouTube session (never commit)
+cookies.txt
+
 # misc
 .DS_Store
 *.pem

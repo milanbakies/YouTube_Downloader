@@ -22,6 +22,15 @@ if [ ! -d node_modules ]; then
   npm install
 fi
 
+if [ ! -f .env.local ] && [ -f .env.example ]; then
+  cp .env.example .env.local
+  echo "Created .env.local (YouTube cookies via Chrome)."
+fi
+
+# Logged-in Chrome cookies — needed after a few downloads when YouTube bot-checks.
+export YT_DLP_COOKIES_FROM_BROWSER="${YT_DLP_COOKIES_FROM_BROWSER:-chrome}"
+echo "Using browser cookies: ${YT_DLP_COOKIES_FROM_BROWSER} (allow Keychain if macOS asks)"
+
 echo "Stopping anything on port ${PORT}…"
 for _ in 1 2; do
   PIDS=$(lsof -nP -iTCP:"${PORT}" -sTCP:LISTEN -t 2>/dev/null || true)

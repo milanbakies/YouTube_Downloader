@@ -57,6 +57,41 @@ export function cookiesFromBrowser(): string | undefined {
   return v || undefined;
 }
 
+export function cookiesFilePath(): string | undefined {
+  const fromEnv = process.env.YT_DLP_COOKIES_FILE?.trim();
+  const candidates: string[] = [];
+  if (fromEnv) {
+    candidates.push(
+      path.isAbsolute(fromEnv) ? fromEnv : path.join(PROJECT_ROOT, fromEnv),
+    );
+  }
+  candidates.push(
+    path.join(PROJECT_ROOT, "cookies.txt"),
+    path.join(dataRoot(), "cookies.txt"),
+  );
+  for (const p of candidates) {
+    try {
+      if (fs.statSync(p).isFile() && fs.statSync(p).size > 32) return p;
+    } catch {
+      /* try next */
+    }
+  }
+  return undefined;
+}
+
+export type YtDlpCookies =
+  | { mode: "file"; path: string }
+  | { mode: "browser"; browser: string };
+
+/** File-based cookies win over browser (no Keychain prompt). */
+export function resolveYtdlpCookies(): YtDlpCookies | undefined {
+  const file = cookiesFilePath();
+  if (file) return { mode: "file", path: file };
+  const browser = cookiesFromBrowser();
+  if (browser) return { mode: "browser", browser };
+  return undefined;
+}
+
 /** True only for real playlists — not YouTube Mix/Radio (`list=RD…`). */
 export function isPlaylistUrl(url: string): boolean {
   try {

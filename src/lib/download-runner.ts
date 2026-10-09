@@ -3,13 +3,14 @@ import fs from "fs";
 import path from "path";
 import { patchJob, getJob } from "./job-store";
 import {
-  cookiesFromBrowser,
   ffmpegPath,
+  resolveYtdlpCookies,
   jobDir,
   jobFilesDir,
   ytdlpPath,
 } from "./paths";
 import type { AudioQuality, Job } from "./types";
+import { formatYtdlpFailure } from "./ytdlp-errors";
 import { zipDirectory } from "./zip";
 
 const active = new Set<string>();
@@ -164,6 +165,10 @@ async function runYtdlp(job: Job): Promise<void> {
     "10",
     "--fragment-retries",
     "10",
+    "--sleep-interval",
+    "1",
+    "--max-sleep-interval",
+    "5",
   ];
 
   if (job.isPlaylist) {
@@ -172,9 +177,11 @@ async function runYtdlp(job: Job): Promise<void> {
     args.push("--no-playlist");
   }
 
-  const cookies = cookiesFromBrowser();
-  if (cookies) {
-    args.push("--cookies-from-browser", cookies);
+  const cookies = resolveYtdlpCookies();
+  if (cookies?.mode === "file") {
+    args.push("--cookies", cookies.path);
+  } else if (cookies?.mode === "browser") {
+    args.push("--cookies-from-browser", cookies.browser);
   }
 
   args.push(job.url);
@@ -209,12 +216,7 @@ async function runYtdlp(job: Job): Promise<void> {
 
   if (code === 0) return;
 
-  const hint = stderrTail.includes("Sign in to confirm")
-    ? " YouTube wants browser cookies — run from Terminal with export YT_DLP_COOKIES_FROM_BROWSER=chrome (allow keychain access), then retry."
-    : "";
-  throw new Error(
-    `yt-dlp exited with code ${code ?? "unknown"}.${hint} ${stderrTail.slice(-400)}`.trim(),
-  );
+  throw new Error(formatYtdlpFailure(stderrTail, code));
 }
 
 async function publishStableDownload(
