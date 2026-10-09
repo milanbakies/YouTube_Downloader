@@ -92,6 +92,14 @@ export function resolveYtdlpCookies(): YtDlpCookies | undefined {
   return undefined;
 }
 
+/** CLI flags for yt-dlp (`--cookies` or `--cookies-from-browser`). */
+export function ytdlpCookieCliArgs(): string[] {
+  const cookies = resolveYtdlpCookies();
+  if (!cookies) return [];
+  if (cookies.mode === "file") return ["--cookies", cookies.path];
+  return ["--cookies-from-browser", cookies.browser];
+}
+
 /** True only for real playlists — not YouTube Mix/Radio (`list=RD…`). */
 export function isPlaylistUrl(url: string): boolean {
   try {

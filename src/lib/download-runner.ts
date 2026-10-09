@@ -4,8 +4,8 @@ import path from "path";
 import { patchJob, getJob } from "./job-store";
 import {
   ffmpegPath,
-  resolveYtdlpCookies,
   jobDir,
+  ytdlpCookieCliArgs,
   jobFilesDir,
   ytdlpPath,
 } from "./paths";
@@ -94,10 +94,7 @@ async function probePlaylist(url: string): Promise<{ title?: string; count?: num
     "--no-warnings",
     url,
   ];
-  const cookies = cookiesFromBrowser();
-  if (cookies) {
-    args.unshift("--cookies-from-browser", cookies);
-  }
+  args.unshift(...ytdlpCookieCliArgs());
 
   let out = "";
   try {
@@ -177,12 +174,7 @@ async function runYtdlp(job: Job): Promise<void> {
     args.push("--no-playlist");
   }
 
-  const cookies = resolveYtdlpCookies();
-  if (cookies?.mode === "file") {
-    args.push("--cookies", cookies.path);
-  } else if (cookies?.mode === "browser") {
-    args.push("--cookies-from-browser", cookies.browser);
-  }
+  args.push(...ytdlpCookieCliArgs());
 
   args.push(job.url);
 
