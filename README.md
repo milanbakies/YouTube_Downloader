@@ -22,6 +22,8 @@ Or run the helper script:
 
 ## Run locally
 
+**Easiest on macOS:** double-click `YouTube Downloader starten.command` in Finder. It stops any old server on port 4317, starts the app, and opens your browser.
+
 ```bash
 git clone https://github.com/milanbakies/YouTube_Downloader.git
 cd YouTube_Downloader
