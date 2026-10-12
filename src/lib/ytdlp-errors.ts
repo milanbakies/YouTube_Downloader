@@ -17,7 +17,7 @@ export function formatYtdlpFailure(
   ) {
     return [
       "ffmpeg could not convert the downloaded audio (often a bad partial file).",
-      "The app retries up to three times; if this persists, start a new conversion or run: npm run cookies:export",
+      "The app retries with different strategies (including direct ffmpeg). If this persists, run npm run cookies:export and start a new conversion.",
     ].join(" ");
   }
 

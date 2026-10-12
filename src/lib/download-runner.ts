@@ -28,8 +28,10 @@ function parseProgressLine(line: string): number | null {
   return Math.min(100, Math.max(0, n));
 }
 
-const YTDLP_NO_OUTPUT_MS = 3 * 60 * 1000;
+/** Long audiobooks can sit in ffmpeg for 10+ minutes with no yt-dlp lines. */
+const YTDLP_NO_OUTPUT_MS = 90 * 60 * 1000;
 const PROBE_TIMEOUT_MS = 45 * 1000;
+const MIN_AUDIO_BYTES = 256 * 1024;
 
 function spawnYtdlp(
   args: string[],
@@ -56,7 +58,7 @@ function spawnYtdlp(
         clearInterval(watchdog);
         reject(
           new Error(
-            "yt-dlp stalled (no output for 3 minutes). If YT_DLP_COOKIES_FROM_BROWSER is set, launch the dev server from Terminal so macOS can access the browser keychain, or remove that variable and retry.",
+            "yt-dlp stalled (no output for 90 minutes). For long audiobooks, leave the job running while ffmpeg converts.",
           ),
         );
       }
@@ -150,11 +152,137 @@ function clearAllJobFiles(jobId: string): void {
 }
 
 type YtdlpRunOptions = {
+  mode: "extract-mp3" | "download-only";
   embedThumbnail: boolean;
   embedMetadata: boolean;
   allowContinue: boolean;
   forceOverwrites: boolean;
 };
+
+const AUDIO_SOURCE_EXT = new Set([
+  ".webm",
+  ".m4a",
+  ".opus",
+  ".ogg",
+  ".mp4",
+  ".mkv",
+  ".wav",
+]);
+
+function listAudioSources(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => {
+      const lower = f.toLowerCase();
+      if (lower.endsWith(".mp3")) return false;
+      const ext = path.extname(lower);
+      return AUDIO_SOURCE_EXT.has(ext);
+    })
+    .map((f) => path.join(dir, f));
+}
+
+function spawnFfmpegMp3(
+  inputPath: string,
+  outputPath: string,
+  quality: AudioQuality,
+  onProgress?: (ratio: number) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ff = ffmpegPath();
+    const args = [
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      inputPath,
+      "-vn",
+      "-codec:a",
+      "libmp3lame",
+      "-b:a",
+      `${quality}k`,
+      "-progress",
+      "pipe:1",
+      "-nostats",
+      outputPath,
+    ];
+    const proc = spawn(ff, args, {
+      env: {
+        ...process.env,
+        PATH: `${path.dirname(ff)}:${process.env.PATH ?? ""}`,
+      },
+    });
+
+    let buf = "";
+    proc.stdout.on("data", (chunk) => {
+      buf += chunk.toString();
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+      let durationMs: number | null = null;
+      let outTimeMs: number | null = null;
+      for (const line of lines) {
+        if (line.startsWith("duration=")) {
+          const v = parseFloat(line.slice("duration=".length));
+          if (!Number.isNaN(v)) durationMs = v * 1_000_000;
+        }
+        if (line.startsWith("out_time_ms=")) {
+          const v = parseInt(line.slice("out_time_ms=".length), 10);
+          if (!Number.isNaN(v)) outTimeMs = v;
+        }
+      }
+      if (durationMs && outTimeMs && durationMs > 0 && onProgress) {
+        onProgress(Math.min(99, (outTimeMs / durationMs) * 100));
+      }
+    });
+
+    let stderr = "";
+    proc.stderr.on("data", (c) => {
+      stderr = (stderr + c.toString()).slice(-2000);
+    });
+
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`ffmpeg failed (exit ${code ?? "?"}). ${stderr}`.trim()));
+    });
+  });
+}
+
+async function convertSourcesToMp3(job: Job): Promise<void> {
+  const dir = jobFilesDir(job.id);
+  const sources = listAudioSources(dir);
+  if (sources.length === 0) {
+    throw new Error(
+      "No audio file was downloaded to convert. Try npm run cookies:export and retry.",
+    );
+  }
+
+  for (const src of sources) {
+    const st = fs.statSync(src);
+    if (st.size < MIN_AUDIO_BYTES) {
+      throw new Error(
+        "Downloaded file is too small (likely a YouTube block page). Run npm run cookies:export, then retry.",
+      );
+    }
+    const out = `${src.slice(0, -path.extname(src).length)}.mp3`;
+    patchJob(job.id, {
+      message: `Converting to MP3 (${path.basename(src)})…`,
+      progress: 85,
+    });
+    await spawnFfmpegMp3(src, out, job.quality, (pct) => {
+      patchJob(job.id, {
+        progress: Math.round(85 + pct * 0.14),
+        message: `Converting to MP3… ${Math.round(pct)}%`,
+      });
+    });
+    try {
+      fs.unlinkSync(src);
+    } catch {
+      /* keep source if delete fails */
+    }
+  }
+}
 
 async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
   const outDir = jobFilesDir(job.id);
@@ -167,13 +295,6 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     path.dirname(ffmpegPath()),
     "-f",
     YTDLP_AUDIO_FORMAT,
-    "-x",
-    "--audio-format",
-    "mp3",
-    "--audio-quality",
-    "0",
-    "--postprocessor-args",
-    extractAudioPostArgs(job.quality),
     "-o",
     outputTemplate,
     "--retries",
@@ -185,6 +306,18 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     "--max-sleep-interval",
     "5",
   ];
+
+  if (options.mode === "extract-mp3") {
+    args.push(
+      "-x",
+      "--audio-format",
+      "mp3",
+      "--audio-quality",
+      "0",
+      "--postprocessor-args",
+      extractAudioPostArgs(job.quality),
+    );
+  }
 
   if (options.forceOverwrites) {
     args.push("--force-overwrites");
@@ -244,7 +377,21 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     }
   });
 
-  if (code === 0) return;
+  if (code === 0) {
+    if (options.mode === "download-only") {
+      await convertSourcesToMp3(job);
+    }
+    return;
+  }
+
+  if (options.mode === "download-only" && listAudioSources(outDir).length > 0) {
+    try {
+      await convertSourcesToMp3(job);
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
 
   throw new Error(formatYtdlpFailure(stderrTail, code));
 }
@@ -258,18 +405,28 @@ function isPostprocessFailure(message: string): boolean {
 async function runYtdlpWithRetry(job: Job): Promise<void> {
   const attempts: YtdlpRunOptions[] = [
     {
+      mode: "extract-mp3",
       embedThumbnail: true,
       embedMetadata: true,
       allowContinue: true,
       forceOverwrites: false,
     },
     {
+      mode: "extract-mp3",
       embedThumbnail: false,
       embedMetadata: true,
       allowContinue: false,
       forceOverwrites: true,
     },
     {
+      mode: "extract-mp3",
+      embedThumbnail: false,
+      embedMetadata: false,
+      allowContinue: false,
+      forceOverwrites: true,
+    },
+    {
+      mode: "download-only",
       embedThumbnail: false,
       embedMetadata: false,
       allowContinue: false,
@@ -291,7 +448,10 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
     } catch (err) {
       lastError = err;
       const msg = err instanceof Error ? err.message : String(err);
-      if (!isPostprocessFailure(msg) || i === attempts.length - 1) {
+      const recoverable =
+        isPostprocessFailure(msg) ||
+        /too small|likely a YouTube block/i.test(msg);
+      if (!recoverable || i === attempts.length - 1) {
         throw err;
       }
     }
