@@ -22,6 +22,13 @@ export function formatYtdlpFailure(
     ].join(" ");
   }
 
+  if (/part-Frag|No such file or directory/i.test(tail)) {
+    return [
+      "The stream download lost a piece of the file.",
+      "Restart the app and start a new conversion. The next try downloads one piece at a time.",
+    ].join(" ");
+  }
+
   if (/HTTP Error 403|unable to download video data/i.test(tail)) {
     return [
       "YouTube blocked the direct audio link (HTTP 403).",

@@ -290,7 +290,7 @@ async function convertSourcesToMp3(job: Job): Promise<void> {
 
 async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
   const outDir = jobFilesDir(job.id);
-  const outputTemplate = path.join(outDir, "%(title).200B [%(id)s].%(ext)s");
+  const outputTemplate = path.join(outDir, "%(id)s.%(ext)s");
 
   const args = [
     "--newline",
@@ -450,7 +450,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       forceOverwrites: true,
       useCookies: false,
       format: YTDLP_AUDIO_FORMAT_HLS,
-      concurrentFragments: 8,
+      concurrentFragments: 1,
     },
     {
       mode: "download-only",
@@ -460,7 +460,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       forceOverwrites: true,
       useCookies: false,
       format: YTDLP_AUDIO_FORMAT_HLS,
-      concurrentFragments: 8,
+      concurrentFragments: 1,
     },
   ];
 
@@ -492,7 +492,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
             forceOverwrites: true,
             useCookies: true,
             format: YTDLP_AUDIO_FORMAT_HLS,
-            concurrentFragments: 4,
+            concurrentFragments: 1,
           });
           return;
         } catch (cookieErr) {
@@ -503,7 +503,9 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
         isPostprocessFailure(msg) ||
         isBotCheck(msg) ||
         isForbidden(msg) ||
-        /too small|likely a YouTube block/i.test(msg);
+        /part-Frag|No such file or directory|too small|likely a YouTube block/i.test(
+          msg,
+        );
       if (!recoverable || i === attempts.length - 1) {
         const raw = lastError instanceof Error ? lastError.message : String(lastError);
         throw new Error(formatYtdlpFailure(raw, null));
