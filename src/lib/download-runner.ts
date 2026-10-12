@@ -15,8 +15,8 @@ import { zipDirectory } from "./zip";
 
 const active = new Set<string>();
 
-function bitrateArg(quality: AudioQuality): string {
-  return `ffmpeg:-b:a ${quality}k`;
+function extractAudioPostArgs(quality: AudioQuality): string {
+  return `FFmpegExtractAudio:-b:a ${quality}k`;
 }
 
 function parseProgressLine(line: string): number | null {
@@ -136,7 +136,25 @@ function listMp3Files(dir: string): string[] {
     .map((f) => path.join(dir, f));
 }
 
-async function runYtdlp(job: Job): Promise<void> {
+function clearNonMp3Artifacts(jobId: string): void {
+  const dir = jobFilesDir(jobId);
+  if (!fs.existsSync(dir)) return;
+  for (const name of fs.readdirSync(dir)) {
+    if (name.toLowerCase().endsWith(".mp3")) continue;
+    try {
+      fs.unlinkSync(path.join(dir, name));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+type YtdlpRunOptions = {
+  embedThumbnail: boolean;
+  allowContinue: boolean;
+};
+
+async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
   const outDir = jobFilesDir(job.id);
   const outputTemplate = path.join(outDir, "%(title).200B [%(id)s].%(ext)s");
 
@@ -145,19 +163,19 @@ async function runYtdlp(job: Job): Promise<void> {
     "--no-color",
     "--ffmpeg-location",
     path.dirname(ffmpegPath()),
+    "-f",
+    "ba/bestaudio/best",
     "-x",
     "--audio-format",
     "mp3",
     "--audio-quality",
     "0",
     "--postprocessor-args",
-    bitrateArg(job.quality),
+    extractAudioPostArgs(job.quality),
     "-o",
     outputTemplate,
-    "--embed-thumbnail",
     "--embed-metadata",
     "--no-overwrites",
-    "--continue",
     "--retries",
     "10",
     "--fragment-retries",
@@ -167,6 +185,16 @@ async function runYtdlp(job: Job): Promise<void> {
     "--max-sleep-interval",
     "5",
   ];
+
+  if (options.allowContinue) {
+    args.push("--continue");
+  } else {
+    args.push("--no-continue");
+  }
+
+  if (options.embedThumbnail) {
+    args.push("--embed-thumbnail", "--convert-thumbnails", "jpg");
+  }
 
   if (job.isPlaylist) {
     args.push("--yes-playlist");
@@ -209,6 +237,29 @@ async function runYtdlp(job: Job): Promise<void> {
   if (code === 0) return;
 
   throw new Error(formatYtdlpFailure(stderrTail, code));
+}
+
+async function runYtdlpWithRetry(job: Job): Promise<void> {
+  const primary: YtdlpRunOptions = {
+    embedThumbnail: true,
+    allowContinue: true,
+  };
+  try {
+    await runYtdlp(job, primary);
+    return;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const postprocess =
+      /Invalid data found when processing input|Error opening input files|Postprocessing/i.test(
+        msg,
+      );
+    if (!postprocess) throw err;
+    clearNonMp3Artifacts(job.id);
+    patchJob(job.id, {
+      message: "Retrying without partial files (ffmpeg postprocess)…",
+    });
+    await runYtdlp(job, { embedThumbnail: false, allowContinue: false });
+  }
 }
 
 async function publishStableDownload(
@@ -273,7 +324,7 @@ export async function runJob(jobId: string): Promise<void> {
       });
     }
 
-    await runYtdlp(job);
+    await runYtdlpWithRetry(job);
 
     const outputFile = await finalizeOutput(job);
     const base = path.basename(outputFile);

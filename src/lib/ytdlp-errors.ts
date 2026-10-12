@@ -10,6 +10,17 @@ export function formatYtdlpFailure(
       .filter((l) => l.startsWith("ERROR:"))
       .pop() ?? tail.slice(-400);
 
+  if (
+    /Invalid data found when processing input|Error opening input files/i.test(
+      tail,
+    )
+  ) {
+    return [
+      "ffmpeg could not convert the downloaded audio (often a bad partial file).",
+      "The app retries automatically once; if this persists, delete .data/jobs for that job and try again, or run: npm run cookies:export",
+    ].join(" ");
+  }
+
   if (/Sign in to confirm|not a bot/i.test(tail)) {
     return [
       "YouTube is asking for a logged-in browser (bot check).",

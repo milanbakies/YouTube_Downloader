@@ -29,7 +29,7 @@ fi
 
 # Logged-in Chrome cookies — needed after a few downloads when YouTube bot-checks.
 export YT_DLP_COOKIES_FROM_BROWSER="${YT_DLP_COOKIES_FROM_BROWSER:-chrome}"
-echo "Using browser cookies: ${YT_DLP_COOKIES_FROM_BROWSER} (allow Keychain if macOS asks)"
+echo "YouTube cookies: exported once to .data/cookies.txt (Keychain may ask on refresh only)."
 
 echo "Stopping anything on port ${PORT}…"
 for _ in 1 2; do

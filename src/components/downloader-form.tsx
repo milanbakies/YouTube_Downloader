@@ -151,8 +151,9 @@ export function DownloaderForm() {
             After a few downloads YouTube may block anonymous requests. Quit
             other dev servers, then double-click{" "}
             <strong>YouTube Downloader starten.command</strong> (uses Chrome
-            cookies), or add <code className="text-xs">cookies.txt</code> to the
-            project folder.
+            cookies once to <code className="text-xs">.data/cookies.txt</code>),
+            or add <code className="text-xs">cookies.txt</code> in the project
+            folder.
           </AlertDescription>
         </Alert>
       )}

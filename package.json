@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "dev:force": "next dev -p 4317",
+    "dev:force": "node scripts/export-youtube-cookies.mjs && next dev -p 4317",
+    "cookies:export": "YT_DLP_REFRESH_COOKIES=1 node scripts/export-youtube-cookies.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

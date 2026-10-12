@@ -1,5 +1,4 @@
-import { spawn } from "node:child_process";
-import { execSync } from "node:child_process";
+import { spawn, spawnSync, execSync } from "node:child_process";
 
 const PORT = 4317;
 const APP_URL = `http://127.0.0.1:${PORT}`;
@@ -28,6 +27,12 @@ if (await healthOk()) {
   openBrowser();
   process.exit(0);
 }
+
+spawnSync("node", ["scripts/export-youtube-cookies.mjs"], {
+  stdio: "inherit",
+  cwd: process.cwd(),
+  env: process.env,
+});
 
 const child = spawn("npx", ["next", "dev", "-p", String(PORT)], {
   stdio: "inherit",

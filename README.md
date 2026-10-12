@@ -55,7 +55,9 @@ Downloads are stored under `.data/jobs/` until you remove them.
 
 After several downloads YouTube often returns *Sign in to confirm you’re not a bot*. The app must pass **logged-in** cookies to yt-dlp.
 
-**Recommended:** use `YouTube Downloader starten.command` — it sets `YT_DLP_COOKIES_FROM_BROWSER=chrome` and creates `.env.local` from `.env.example` if needed. Stay signed in to YouTube in Chrome; allow Keychain access when macOS asks.
+**Recommended:** use `YouTube Downloader starten.command` — it sets `YT_DLP_COOKIES_FROM_BROWSER=chrome`, exports cookies **once** to `.data/cookies.txt` (Keychain at most once per ~12h), then starts the server. Stay signed in to YouTube in Chrome.
+
+To refresh cookies manually: `npm run cookies:export` (allow Keychain once).
 
 **Alternative:** place a Netscape `cookies.txt` in the project folder (see [yt-dlp cookie export](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies)). That avoids Keychain prompts.
 
