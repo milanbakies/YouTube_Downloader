@@ -55,7 +55,9 @@ Downloads are stored under `.data/jobs/` until you remove them.
 
 After several downloads YouTube often returns *Sign in to confirm you’re not a bot*. The app must pass **logged-in** cookies to yt-dlp.
 
-**Recommended:** use `YouTube Downloader starten.command` — it sets `YT_DLP_COOKIES_FROM_BROWSER=chrome`, exports cookies **once** to `.data/cookies.txt` (Keychain at most once per ~12h), then starts the server. Stay signed in to YouTube in Chrome.
+Downloads run **without** cookies first. Signed-in cookies can make YouTube return a tiny broken file instead of the real audio.
+
+**If YouTube asks you to sign in:** `YouTube Downloader starten.command` exports Chrome cookies once to `.data/cookies.txt` (Keychain at most once per ~12h). The app uses that file only after a bot check. Stay signed in to YouTube in Chrome.
 
 To refresh cookies manually: `npm run cookies:export` (allow Keychain once).
 

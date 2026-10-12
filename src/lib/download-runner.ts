@@ -97,7 +97,6 @@ async function probePlaylist(url: string): Promise<{ title?: string; count?: num
     "--no-warnings",
     url,
   ];
-  args.unshift(...ytdlpCookieCliArgs());
 
   let out = "";
   try {
@@ -157,6 +156,8 @@ type YtdlpRunOptions = {
   embedMetadata: boolean;
   allowContinue: boolean;
   forceOverwrites: boolean;
+  /** Signed-in cookies can force a broken SABR stub. Use only after a bot check. */
+  useCookies: boolean;
 };
 
 const AUDIO_SOURCE_EXT = new Set([
@@ -345,7 +346,9 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     args.push("--no-playlist");
   }
 
-  args.push(...ytdlpCookieCliArgs());
+  if (options.useCookies) {
+    args.push(...ytdlpCookieCliArgs());
+  }
 
   args.push(job.url);
 
@@ -381,6 +384,7 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     if (options.mode === "download-only") {
       await convertSourcesToMp3(job);
     }
+    assertMp3sAreReal(job.id);
     return;
   }
 
@@ -393,11 +397,26 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     }
   }
 
-  throw new Error(formatYtdlpFailure(stderrTail, code));
+  throw new Error(stderrTail || `yt-dlp exited with code ${code ?? "?"}`);
+}
+
+function assertMp3sAreReal(jobId: string): void {
+  const mp3s = listMp3Files(jobFilesDir(jobId));
+  if (mp3s.length === 0) return;
+  const real = mp3s.filter((f) => fs.statSync(f).size >= MIN_AUDIO_BYTES);
+  if (real.length === 0) {
+    throw new Error(
+      "Postprocessing: Invalid data found when processing input (output was only a stub)",
+    );
+  }
+}
+
+function isBotCheck(message: string): boolean {
+  return /Sign in to confirm|not a bot/i.test(message);
 }
 
 function isPostprocessFailure(message: string): boolean {
-  return /Invalid data found when processing input|Error opening input files|Postprocessing/i.test(
+  return /Invalid data found when processing input|Error opening input files|Postprocessing|only a stub|SABR/i.test(
     message,
   );
 }
@@ -408,15 +427,9 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       mode: "extract-mp3",
       embedThumbnail: true,
       embedMetadata: true,
-      allowContinue: true,
-      forceOverwrites: false,
-    },
-    {
-      mode: "extract-mp3",
-      embedThumbnail: false,
-      embedMetadata: true,
       allowContinue: false,
       forceOverwrites: true,
+      useCookies: false,
     },
     {
       mode: "extract-mp3",
@@ -424,6 +437,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       embedMetadata: false,
       allowContinue: false,
       forceOverwrites: true,
+      useCookies: false,
     },
     {
       mode: "download-only",
@@ -431,6 +445,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       embedMetadata: false,
       allowContinue: false,
       forceOverwrites: true,
+      useCookies: false,
     },
   ];
 
@@ -439,7 +454,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
     if (i > 0) {
       clearAllJobFiles(job.id);
       patchJob(job.id, {
-        message: `Retrying download (${i + 1}/${attempts.length})…`,
+        message: `Retrying without browser cookies (${i + 1}/${attempts.length})…`,
       });
     }
     try {
@@ -448,15 +463,37 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
     } catch (err) {
       lastError = err;
       const msg = err instanceof Error ? err.message : String(err);
+      if (isBotCheck(msg) && ytdlpCookieCliArgs().length > 0) {
+        clearAllJobFiles(job.id);
+        patchJob(job.id, {
+          message: "YouTube asked for sign-in. Retrying with saved cookies…",
+        });
+        try {
+          await runYtdlp(job, {
+            mode: "download-only",
+            embedThumbnail: false,
+            embedMetadata: false,
+            allowContinue: false,
+            forceOverwrites: true,
+            useCookies: true,
+          });
+          return;
+        } catch (cookieErr) {
+          lastError = cookieErr;
+        }
+      }
       const recoverable =
         isPostprocessFailure(msg) ||
+        isBotCheck(msg) ||
         /too small|likely a YouTube block/i.test(msg);
       if (!recoverable || i === attempts.length - 1) {
-        throw err;
+        const raw = lastError instanceof Error ? lastError.message : String(lastError);
+        throw new Error(formatYtdlpFailure(raw, null));
       }
     }
   }
-  throw lastError;
+  const raw = lastError instanceof Error ? lastError.message : "Download failed";
+  throw new Error(formatYtdlpFailure(raw, null));
 }
 
 async function publishStableDownload(

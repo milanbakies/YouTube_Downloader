@@ -16,8 +16,9 @@ export function formatYtdlpFailure(
     )
   ) {
     return [
-      "ffmpeg could not convert the downloaded audio (often a bad partial file).",
-      "The app retries with different strategies (including direct ffmpeg). If this persists, run npm run cookies:export and start a new conversion.",
+      "YouTube returned a broken audio file.",
+      "Signed-in cookies can do that (SABR stub). The app downloads without cookies first.",
+      "Restart the app and start a new conversion.",
     ].join(" ");
   }
 
