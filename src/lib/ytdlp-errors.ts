@@ -22,6 +22,13 @@ export function formatYtdlpFailure(
     ].join(" ");
   }
 
+  if (/HTTP Error 403|unable to download video data/i.test(tail)) {
+    return [
+      "YouTube blocked the direct audio link (HTTP 403).",
+      "The app retries over the stream. Restart and start a new conversion if this was an older attempt.",
+    ].join(" ");
+  }
+
   if (/Sign in to confirm|not a bot/i.test(tail)) {
     return [
       "YouTube is asking for a logged-in browser (bot check).",

@@ -8,6 +8,7 @@ import {
   ytdlpCookieCliArgs,
   jobFilesDir,
   YTDLP_AUDIO_FORMAT,
+  YTDLP_AUDIO_FORMAT_HLS,
   ytdlpPath,
 } from "./paths";
 import type { AudioQuality, Job } from "./types";
@@ -158,6 +159,8 @@ type YtdlpRunOptions = {
   forceOverwrites: boolean;
   /** Signed-in cookies can force a broken SABR stub. Use only after a bot check. */
   useCookies: boolean;
+  format: string;
+  concurrentFragments: number;
 };
 
 const AUDIO_SOURCE_EXT = new Set([
@@ -295,7 +298,9 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     "--ffmpeg-location",
     path.dirname(ffmpegPath()),
     "-f",
-    YTDLP_AUDIO_FORMAT,
+    options.format,
+    "--concurrent-fragments",
+    String(options.concurrentFragments),
     "-o",
     outputTemplate,
     "--retries",
@@ -415,6 +420,10 @@ function isBotCheck(message: string): boolean {
   return /Sign in to confirm|not a bot/i.test(message);
 }
 
+function isForbidden(message: string): boolean {
+  return /HTTP Error 403|unable to download video data/i.test(message);
+}
+
 function isPostprocessFailure(message: string): boolean {
   return /Invalid data found when processing input|Error opening input files|Postprocessing|only a stub|SABR/i.test(
     message,
@@ -430,14 +439,18 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       allowContinue: false,
       forceOverwrites: true,
       useCookies: false,
+      format: YTDLP_AUDIO_FORMAT,
+      concurrentFragments: 1,
     },
     {
       mode: "extract-mp3",
       embedThumbnail: false,
-      embedMetadata: false,
+      embedMetadata: true,
       allowContinue: false,
       forceOverwrites: true,
       useCookies: false,
+      format: YTDLP_AUDIO_FORMAT_HLS,
+      concurrentFragments: 8,
     },
     {
       mode: "download-only",
@@ -446,6 +459,8 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       allowContinue: false,
       forceOverwrites: true,
       useCookies: false,
+      format: YTDLP_AUDIO_FORMAT_HLS,
+      concurrentFragments: 8,
     },
   ];
 
@@ -454,7 +469,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
     if (i > 0) {
       clearAllJobFiles(job.id);
       patchJob(job.id, {
-        message: `Retrying without browser cookies (${i + 1}/${attempts.length})…`,
+        message: `Direct link was blocked. Retrying via stream (${i + 1}/${attempts.length})…`,
       });
     }
     try {
@@ -476,6 +491,8 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
             allowContinue: false,
             forceOverwrites: true,
             useCookies: true,
+            format: YTDLP_AUDIO_FORMAT_HLS,
+            concurrentFragments: 4,
           });
           return;
         } catch (cookieErr) {
@@ -485,6 +502,7 @@ async function runYtdlpWithRetry(job: Job): Promise<void> {
       const recoverable =
         isPostprocessFailure(msg) ||
         isBotCheck(msg) ||
+        isForbidden(msg) ||
         /too small|likely a YouTube block/i.test(msg);
       if (!recoverable || i === attempts.length - 1) {
         const raw = lastError instanceof Error ? lastError.message : String(lastError);

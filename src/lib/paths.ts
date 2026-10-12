@@ -48,6 +48,10 @@ function resolveBinary(name: string, envVar?: string): string {
 export const YTDLP_AUDIO_FORMAT =
   "ba[language^=en]/ba[language=en-US]/ba[ext=m4a]/ba/bestaudio/best";
 
+/** HTTPS DASH often 403s; HLS still has the full English track. */
+export const YTDLP_AUDIO_FORMAT_HLS =
+  "ba[language^=en][protocol^=m3u8]/ba[protocol^=m3u8]/bestaudio[protocol^=m3u8]";
+
 export function ytdlpPath(): string {
   return resolveBinary("yt-dlp", "YT_DLP_PATH");
 }
