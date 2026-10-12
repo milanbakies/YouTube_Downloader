@@ -7,6 +7,7 @@ import {
   jobDir,
   ytdlpCookieCliArgs,
   jobFilesDir,
+  YTDLP_AUDIO_FORMAT,
   ytdlpPath,
 } from "./paths";
 import type { AudioQuality, Job } from "./types";
@@ -136,11 +137,10 @@ function listMp3Files(dir: string): string[] {
     .map((f) => path.join(dir, f));
 }
 
-function clearNonMp3Artifacts(jobId: string): void {
+function clearAllJobFiles(jobId: string): void {
   const dir = jobFilesDir(jobId);
   if (!fs.existsSync(dir)) return;
   for (const name of fs.readdirSync(dir)) {
-    if (name.toLowerCase().endsWith(".mp3")) continue;
     try {
       fs.unlinkSync(path.join(dir, name));
     } catch {
@@ -151,7 +151,9 @@ function clearNonMp3Artifacts(jobId: string): void {
 
 type YtdlpRunOptions = {
   embedThumbnail: boolean;
+  embedMetadata: boolean;
   allowContinue: boolean;
+  forceOverwrites: boolean;
 };
 
 async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
@@ -164,7 +166,7 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     "--ffmpeg-location",
     path.dirname(ffmpegPath()),
     "-f",
-    "ba/bestaudio/best",
+    YTDLP_AUDIO_FORMAT,
     "-x",
     "--audio-format",
     "mp3",
@@ -174,8 +176,6 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     extractAudioPostArgs(job.quality),
     "-o",
     outputTemplate,
-    "--embed-metadata",
-    "--no-overwrites",
     "--retries",
     "10",
     "--fragment-retries",
@@ -186,10 +186,20 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
     "5",
   ];
 
+  if (options.forceOverwrites) {
+    args.push("--force-overwrites");
+  } else {
+    args.push("--no-overwrites");
+  }
+
   if (options.allowContinue) {
     args.push("--continue");
   } else {
     args.push("--no-continue");
+  }
+
+  if (options.embedMetadata) {
+    args.push("--embed-metadata");
   }
 
   if (options.embedThumbnail) {
@@ -239,27 +249,54 @@ async function runYtdlp(job: Job, options: YtdlpRunOptions): Promise<void> {
   throw new Error(formatYtdlpFailure(stderrTail, code));
 }
 
+function isPostprocessFailure(message: string): boolean {
+  return /Invalid data found when processing input|Error opening input files|Postprocessing/i.test(
+    message,
+  );
+}
+
 async function runYtdlpWithRetry(job: Job): Promise<void> {
-  const primary: YtdlpRunOptions = {
-    embedThumbnail: true,
-    allowContinue: true,
-  };
-  try {
-    await runYtdlp(job, primary);
-    return;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    const postprocess =
-      /Invalid data found when processing input|Error opening input files|Postprocessing/i.test(
-        msg,
-      );
-    if (!postprocess) throw err;
-    clearNonMp3Artifacts(job.id);
-    patchJob(job.id, {
-      message: "Retrying without partial files (ffmpeg postprocess)…",
-    });
-    await runYtdlp(job, { embedThumbnail: false, allowContinue: false });
+  const attempts: YtdlpRunOptions[] = [
+    {
+      embedThumbnail: true,
+      embedMetadata: true,
+      allowContinue: true,
+      forceOverwrites: false,
+    },
+    {
+      embedThumbnail: false,
+      embedMetadata: true,
+      allowContinue: false,
+      forceOverwrites: true,
+    },
+    {
+      embedThumbnail: false,
+      embedMetadata: false,
+      allowContinue: false,
+      forceOverwrites: true,
+    },
+  ];
+
+  let lastError: unknown;
+  for (let i = 0; i < attempts.length; i++) {
+    if (i > 0) {
+      clearAllJobFiles(job.id);
+      patchJob(job.id, {
+        message: `Retrying download (${i + 1}/${attempts.length})…`,
+      });
+    }
+    try {
+      await runYtdlp(job, attempts[i]!);
+      return;
+    } catch (err) {
+      lastError = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!isPostprocessFailure(msg) || i === attempts.length - 1) {
+        throw err;
+      }
+    }
   }
+  throw lastError;
 }
 
 async function publishStableDownload(

@@ -44,6 +44,10 @@ function resolveBinary(name: string, envVar?: string): string {
   }
 }
 
+/** Prefer original English on multi-language / auto-dubbed uploads. */
+export const YTDLP_AUDIO_FORMAT =
+  "ba[language^=en]/ba[language=en-US]/ba[ext=m4a]/ba/bestaudio/best";
+
 export function ytdlpPath(): string {
   return resolveBinary("yt-dlp", "YT_DLP_PATH");
 }
